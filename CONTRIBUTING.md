@@ -1,0 +1,198 @@
+# 如何贡献到 F2 🚀
+
+感谢您对 `F2` 的兴趣！🎉 无论是修复 bug、添加新功能，还是改进文档，我们都欢迎您的贡献。您可能希望在开始工作之前打开一个问题，或先向 `support@f2.wiki` 发送电子邮件讨论它。请花点时间阅读此指南，了解我们的开发流程。
+
+## 必备条件 🛠️
+> [!IMPORTANT]
+> 您将需要安装 `Python`，我们强烈建议使用虚拟环境来管理依赖。
+> 本指南的其余部分假定您位于虚拟环境中。
+
+要开始使用该项目，请按照官方文档中的 [安装](https://f2.wiki/install#必备条件) 指南设置开发环境。
+
+接下来按照 [PR贡献者](https://f2.wiki/install#pr贡献者) 的步骤进行操作。
+
+## 分支与 PR 目标 🌿
+> [!IMPORTANT]
+> 请不要向 `main` 分支提交 `PR`。`main` 只保存已发布的代码，开发都在当前的开发分支上进行，目前是 [`v0.0.1.8-pw3`](https://github.com/Johnserf-Seed/f2/tree/v0.0.1.8-pw3)。
+
+- **分支约定**：开发分支命名为 `v<下一个版本号>-pw<序号>`，例如 `v0.0.1.8-pw3`。当前开发分支以 README 顶部的 `Dev Branch` 徽章为准。
+- **基于开发分支开发**：`fork` 之后，从开发分支创建你自己的功能分支：
+
+  ```bash
+  git remote add upstream https://github.com/Johnserf-Seed/f2.git
+  git fetch upstream
+  git checkout -b fix/your-change upstream/v0.0.1.8-pw3
+  ```
+
+- **PR 的目标分支**：创建 `PR` 时，`base` 选择当前开发分支。如果已经提交到了 `main`，在 `PR` 页面标题旁点击 `Edit`，把目标分支改为开发分支即可，不需要关闭重开；出现冲突时先 `rebase` 到开发分支。
+- **目标为 `main` 的外部 `PR`**：会被 `PR target branch` 检查拦下。维护者会请你修改目标分支，或把改动移植到开发分支，并在提交中用 `Co-authored-by` 署名原作者。
+- **发布流程**：开发分支测试完成后合并到 `main`，从 `main` 发布到 `PyPI`，随后创建下一个开发分支。
+
+## Issue 与标签 🏷️
+提交 issue 时请选择对应的模板：故障反馈、平台接口失效、需求建议、文档问题、使用提问。一般的使用问题请发到讨论区的 [Q&A](https://github.com/Johnserf-Seed/f2/discussions/categories/q-a)，安全问题请通过 [私密报告](https://github.com/Johnserf-Seed/f2/security/advisories/new) 提交。
+
+维护者用以下几类标签整理 issue：
+
+| 类别 | 标签 |
+| :--- | :--- |
+| 类型 | `故障(bug)`、`需求建议(enhancement)`、`提问(question)`、`文档改进(docs)` |
+| 平台 | `抖音(douyin)`、`TikTok(tiktok)`、`微博(weibo)`、`推特(twitter)`、`Bark(bark)`，按模板中选择的平台自动添加 |
+| 区域 | `直播(live)`、`下载(download)`、`配置(config)` |
+| 状态 | `已确认(confirmed)`、`等待反馈(feedback)`、`接口变化(api-change)`、`开发分支已修复(fixed-in-dev)`、`重复(duplicate)`、`无效(invalid)`、`不修复(wontfix)` |
+| 优先级 | `紧急(P0)`、`重要(P1)`、`一般(P2)` |
+
+标记为 `开发分支已修复(fixed-in-dev)` 的 issue 可以按 [测试最新功能](https://f2.wiki/install#测试最新功能) 安装开发分支验证，会在正式版发布后关闭。
+
+## 开发规范 📝
+在开发 `F2` 代码时，请注意以下几点：
+
+1. **避免使用变量名缩写**：描述性的变量名能让代码更易读，也更容易维护。
+2. **保持一致性**：遵循已设定的编码风格。
+3. **文档很重要**：确保您的代码有良好的文档，尤其是新的功能或复杂的逻辑。
+4. **避免硬编码**：避免硬编码敏感信息，将配置信息集成在 `conf.yaml` 文件中。
+
+## 提交规范 📌
+在提交代码之前，您应该：
+
+1. **运行测试**：确保所有测试通过。
+2. **检查类型错误**：使用类型检查工具，来捕获类型问题。
+3. **格式化代码**：使用 `black` 自动格式化代码，遵循 `PEP 8` 风格。
+
+## 代码格式化 🛠️
+
+`F2` 使用 [`black`](https://github.com/psf/black) 进行代码格式化。建议在编辑器中设置 `black` 以在保存时格式化代码。
+
+如果使用 `VSCode` 开发，那么已经配置好了 `black` 调试器。您也可以在项目根目录运行以下命令来格式化代码：
+
+```bash
+$ black **/*.py --exclude venv/*
+```
+
+提交前还请运行 `ruff check .`（未使用的导入/变量、未定义名等正确性检查）与 `isort .`，`CI` 会以同样的命令检查。
+
+## Pre-commit 钩子 🔄
+
+`F2` 使用 `pre-commit` 钩子来自动检查代码质量和格式。首先需要安装 pre-commit：
+
+```bash
+$ pip install pre-commit
+$ pre-commit install
+```
+
+安装后，每次执行 `git commit` 时都会自动运行配置的钩子。您也可以手动对所有文件运行所有配置的钩子：
+
+```bash
+$ pre-commit run --all-files
+```
+
+这将执行包括代码格式化、类型检查和其他配置的质量检查，确保您的代码符合项目标准。建议在提交前运行此命令，或者通过 `git commit -m "message"` 自动触发。
+
+如果某个钩子失败，请修复相关问题后再次运行命令检查。对于特殊情况，可以使用 `--no-verify` 跳过钩子检查，但不建议经常使用：
+
+```bash
+$ git commit -m "message" --no-verify
+```
+
+## 测试规范 🧪
+`F2` 使用 `pytest` 进行单元测试。以下是如何进行测试的步骤：
+
+1. **配置测试环境**：确保测试的配置已经准备好。对于异步代码，使用 `pytest-asyncio` 插件。
+2. **编写测试**：对于新功能或 bug 修复，始终添加相应的测试。
+3. **模拟外部依赖**：使用 `unittest.mock` 进行依赖模拟。
+4. **检查测试覆盖率**：查看测试覆盖率，确保没有遗漏。
+5. **提供测试凭据**：`f2/conf/test.yaml` 只保存用于测试的游客数据。需要个人 cookie 时，通过环境变量 `F2_TEST_<APP>_<KEY>`（如 `F2_TEST_DOUYIN_COOKIE`）或同目录的 `test.local.yaml`（已忽略，不会提交）提供，不要写回 `test.yaml`。
+
+在项目根目录运行以下命令来运行
+
+普通测试（不访问网络，与 CI 一致）：
+```bash
+$ pytest -m "not network" -vv
+```
+
+平台接口测试（`f2/apps/*/test` 与版本检查用例带有 `network` 标记，需要真实网络与测试凭据）：
+```bash
+$ pytest -m network -vv
+```
+
+覆盖率测试：
+```bash
+$ pytest --cov-report term-missing --cov=f2 ./ -vv
+```
+
+理想情况下，新代码应该有测试，并且不会破坏现有的测试。如果修改或新添加的代码未出现在覆盖率报告中，则强烈建议添加相应的测试。
+
+## 本地化 🌍
+> [!IMPORTANT]
+> 如果安装了 `F2` 本地化工具 `Babel`，则不需要额外安装 `gettext`。开发依赖（`pip install -e ".[dev]"`）已包含 `Babel`。
+
+翻译源文件是 `f2/languages/<语言>/LC_MESSAGES/<语言>.po`，编译后的 `.mo` 放在同一目录。`.po` 与 `.mo` 都需要提交，测试会检查两者的译文是否一致。
+
+添加或修改翻译的步骤：
+
+1. 在项目根目录运行以下脚本。它会从 `f2` 与 `tests` 抽取文案，更新两个 `.po`，并重新编译 `.mo`：
+
+（适用于 Windows）
+```bash
+$ make_pot.bat
+```
+（适用于 Linux/macOS）
+```bash
+$ bash make_pot.sh
+```
+2. 在 `en_US.po` 中翻译未翻译和标记为模糊（fuzzy）的条目，推荐使用 [Poedit](https://poedit.net/) 工具。模糊条目是根据相似文案自动给出的参考译文，确认或修改后要去掉模糊标记，否则不会编译进 `.mo`。`zh_CN.po` 中留空的条目会直接显示原文，一般无需处理。
+3. 再次运行脚本重新编译 `.mo`，然后把 `.po` 与 `.mo` 一起提交。
+
+## 文档编写 📚
+考虑一下您所做的更改是否会从文档中受益。如果该更改需要文档支持，答案是肯定的。
+
+构建文档需要一些额外的依赖项。这些依赖项可以通过运行（在 `docs` 目录下）以下命令来安装：
+
+1. **本地运行文档**：
+使用 `pnpm` 运行 `VitePress`：
+```bash
+$ cd docs
+$ pnpm i
+$ pnpm docs:dev
+```
+2. **编写文档**：在 `docs` 目录下添加新的代码相关文档。请遵循现有的文档风格和格式。
+3. **本地构建**：提交代码前，确保文档能够正确构建。
+生成静态文档：
+```bash
+$ pnpm docs:build
+```
+
+## 更新 ChangeLog 和 Contributors 📋
+如果这是您第一次为 `F2` 贡献代码，欢迎您！🎉
+
+您需要更新以下文件：
+1. **ChangeLog**：在 `CHANGELOG.md` 文件中更新您的更改摘要。
+2. **贡献者**：将您的名字添加到 `CONTRIBUTORS.md` 文件中。
+3. **团队**：请将您的信息添加到文档的 `team.md` 中。
+
+## 持续集成与发布 🚦
+每个 `PR` 和推送都会触发 `.github/workflows/ci.yml`：
+
+1. **Lint**：`ruff check .`、`black --check .`、`isort --check-only .`、`mypy f2/`，与本地 `pre-commit` 钩子一致。
+2. **Test**：在 Python 3.11–3.14 上运行 `pytest -m "not network"`，并上传覆盖率到 Codecov。
+3. **Build**：构建 `sdist`/`wheel`，`twine check` 校验元数据，并在干净环境安装 `wheel` 做冒烟测试。
+
+`security.yml` 另外运行 `gitleaks` 泄露扫描、`wheel` 内容检查与 `pip-audit` 依赖漏洞扫描（每周一也会定时扫一次）。
+
+发布由 `.github/workflows/release.yml` 完成：维护者更新 `f2/__init__.py` 的 `__version__` 与 `CHANGELOG.md` 并合并后，在 GitHub 的 Releases 页面以 `vX.Y.Z` 为标签创建 Release，点击 Publish release 才会触发构建并通过 PyPI 的 Trusted Publishing 发布，不需要在仓库保存 API token（工作流会校验标签与版本号一致）。草稿不触发；勾选 pre-release 的版本只构建、不发布，构建产物可在工作流页面下载核对；单独推送标签不会发布。首次使用需在 PyPI 项目的 Publishing 设置中添加 GitHub publisher（仓库 `Johnserf-Seed/f2`、工作流 `release.yml`、环境 `pypi`），并在仓库 Settings → Environments 中创建 `pypi` 环境，可加 Required reviewers 在发布前再做一道人工审批。
+
+切换到新的开发分支时，维护者需要同步更新以下位置：
+
+1. 从 `main` 创建新的开发分支，例如 `v0.0.1.9-pw1`。
+2. 更新 `README.md` 与 `README.en.md` 顶部的 `Dev Branch` 徽章与开发分支提示、本文件与 `CONTRIBUTING.en.md` 中的当前开发分支、`.github/dependabot.yml` 的 `target-branch`。
+3. 建议在开发期间把仓库的默认分支（Settings → General → Default branch）设为开发分支：新建 `PR` 会默认指向它，`dependabot`、`PR` 模板与定时扫描也都以默认分支上的配置为准。
+
+## 创建 PR 🚀
+一旦对您的代码感到满意，并确保已遵守上述所有步骤，且通过了所有测试，您就可以创建一个您所 `fork` 分支的 `Pull Request`。**目标分支（`base`）请选择当前开发分支，不要选择 `main`**，并按 `PR` 模板中的检查清单逐项确认。
+
+`GitHub` 提供了一个很好的 [指南](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request) 来帮助您创建 `PR`。请确保 `PR` 中包含您对更改的描述，并将其链接到相关的 `Issue` 或讨论。
+
+## 代码审查 🕵️
+所有的代码更改都需要经过代码审查。等待仓库的代码审查机器人自动检查您的代码。如果有问题，可能会有一些讨论和迭代。大多数情况下，需要几次迭代才能完全解决问题。
+
+## 最后一步 🏁
+一旦您的 `PR` 被批准，它将被合并到当前开发分支，并随下一个版本合入 `main`、发布到 `PyPI`，供所有用户使用。🚀

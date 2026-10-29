@@ -1,0 +1,308 @@
+# 常见的问题与解决办法
+
+## 第 n 次请求响应内容为空
+
+只要是出现第 n 次请求响应内容为空均是 `cookie` 设置的问题。
+
+::: details :link: 解决办法
+1. 检查对应 `app` 配置文件中的 `cookie` 值是否正确配置，未出现换行，空格，缺失，错误字符（`非Ascii码`）等。
+2. 如抖音，完整的网页端 `douyin`的`cookie` 有超过 `60` 个键，而 网页版`tiktok` 为不到 `30` 个。如果你获取的 `cookie` 长度过短，那明显是无法正常使用的。
+3. 使用 `--auto-cookie` 命令时，确保选择的浏览器中已登录正常账号，游客账号的 `cookie` 非常不稳定。
+4. 如果你使用的是该app扫码登录的功能，可能会因为未知的设备环境风控造成网页端与app端账号下线。如果出现扫码登录的 `cookie` 失效，请使用 `--auto-cookie` 命令。
+5. `0.0.1.2` 之前的版本如果将 `cookie` 保存在自定义配置文件中，会有无法被正确识别的情况。
+
+`Cookie` 获取方法请参阅下图。
+![Console Cookie](https://github.com/user-attachments/assets/4523e8c7-f74e-4d5f-9da6-6bb3658f8b24)
+:::
+
+## API Rate Limit Error
+
+如果出现 `API Rate Limit Error` 时只需等待一会后重试即可，这是因为你的请求频率过高，被服务器限制了。
+
+继续频繁出现该错误需在网页端中重新登录并重新获取 `cookie`。仍无效后请切换网络环境和账号。
+
+**参考链接：**
+- https://zh.wikipedia.org/wiki/HTTP%E7%8A%B6%E6%80%81%E7%A0%81
+- https://datatracker.ietf.org/doc/html/rfc6585#section-7.2
+
+## <urlopen error [Errno 11001] getaddrinfo failed>
+
+该问题为本地网络连接问题，请检查你的网络连接是否正常，`DNS` 是否被污染。需要排查代理是否可以正常访问。
+
+## f2: command not found
+
+在非 `Windows` 系统中，如果出现 `f2: command not found` 错误，说明你的系统环境变量中没有添加 `f2` 命令的路径。
+
+::: details :link: 解决办法
+运行 `which f2` 命令查看 `f2` 命令的路径，然后将该路径添加到环境变量中。
+1. 编辑`~/.bashrc`文件，添加`export PATH="$PATH:/home/YOUR_NAME/.local/bin"`。
+2. 运行`source ~/.bashrc`命令使环境变量生效。
+3. 重新打开终端，输入`f2`命令即可使用。
+:::
+
+## WARNING  没有找到符合条件的作品
+
+如果出现 `WARNING  没有找到符合条件的作品`，请检查你是否配置了 `interval` 参数，该参数是用来设置作品发布时间的筛选条件。
+
+::: details :link: 解决办法
+1. 检查你的配置文件中是否有 `interval` 参数。如果没有，请添加为 `interval: all`。
+2. 如果你的配置文件中有 `interval` 参数，请确认区间覆盖了要下载的作品的发布时间（包含首尾两天，按北京时间计算）。格式写错时 `F2` 会在请求前直接报错退出，不会出现这条警告。
+3. `cli` 命令中的 `-i` 参数也是用来设置作品发布时间的筛选条件 你可以设置为 `-i all`。
+4. 如果你使用了 `-i` 参数，同样请确认区间覆盖了要下载的作品。
+:::
+**参考链接：**
+- https://github.com/Johnserf-Seed/f2/issues/42
+- https://github.com/Johnserf-Seed/TikTokDownload/issues/660
+
+## 抖音只下载了主页第一页的十几个作品
+
+使用游客 `cookie`（没有登录的 `cookie`）时，抖音主页作品接口只返回第一页（约 10～13 个作品，含置顶作品），之后的页面只返回状态码，既没有作品也没有翻页信息。`F2` 会提示 `WARNING  接口没有返回翻页信息：游客 cookie 只能获取主页第一页的作品，需要更多作品请配置登录后的 cookie` 并结束。
+
+::: details :link: 解决办法
+1. 在配置文件中填入登录后的 `cookie`，或者用 `--auto-cookie` 从已经登录的浏览器读取。
+2. 设置了 `--interval` 时，第一次请求就从区间的结束时间开始翻页，游客 `cookie` 连一页也拿不到，同样需要登录后的 `cookie`。
+:::
+**参考链接：**
+- https://github.com/Johnserf-Seed/f2/issues/435
+
+## EOF occurred in violation of protocol (_ssl.c:992)
+
+出现 `EOF occurred in violation of protocol (_ssl.c:992)` 说明SSL握手失败。
+
+非项目代码问题，可能涉及到多个方面，需要自己逐步排查和解决。
+
+::: details :link: 解决办法
+1. 请检查你的代理设置是否正确，是否有防火墙或代理服务器阻止了 `SSL/TLS` 握手过程。
+2. 确保代理网络连接稳定。
+3. 使用更加专业的代理工具。
+4. 更换网络环境。
+5. 尝试更换 `DNS` 服务器。
+6. 新版 `httpx` 库修改了代理与证书方面，如果在你的本地出现此问题，可以尝试降级 `httpx` 库版本。
+7. 可能会出现使用工具（如 `Postman` 或 `curl`）测试相同的 `API` 请求，均可以访问但是使用本项目会超时，见第 `6`。
+:::
+
+## _ssl.c:975 The handshake operation timed out
+
+出现 `_ssl.c:975: The handshake operation timed out` 说明 `SSL` 握手超时。可能是网络连接不稳定或延迟过高导致。
+
+非项目代码问题，可能涉及到多个方面，需要自己逐步排查和解决。
+
+::: details :link: 解决办法
+1. 检查网络连接: 确保网络连接稳定，尽量减少网络延迟。
+2. 检查服务器状态: 确保服务器运行正常，并且响应速度良好。
+3. 检查防火墙和代理设置: 确保防火墙和代理服务器的设置正确，并且不会影响 `SSL/TLS` 握手过程。
+4. 调整超时设置。
+:::
+
+## CERTIFICATE_VERIFY_FAILED 证书校验失败
+
+出现 `certificate verify failed` 或 `CERTIFICATE_VERIFY_FAILED` 说明 `F2` 无法验证服务器证书。`F2` 默认校验所有 `HTTPS` 请求的证书。
+
+::: details :link: 解决办法
+1. 先确认系统时间正确、根证书没有过期（`pip install -U certifi` 可更新证书库）。
+2. 如果你在使用抓包工具或公司代理（自签名证书），可以把它的 `CA` 证书路径填到 `conf.yaml` 的 `verify` 中。
+3. 仅在受信任的调试环境下，才用 `--insecure` 临时关闭校验，或在 `conf.yaml` 中设置 `verify: false`。详见 [证书校验](/site-config#证书校验)。
+:::
+
+## douyin 403 Forbidden：Blocked by ArgusSecurityPlugin
+
+下载 `douyin` 的主页作品、单个作品、点赞或收藏时出现 `403 Forbidden`，直接访问接口地址看到 `Blocked by ArgusSecurityPlugin Uifid Not Found`，是因为抖音在 2026 年 8 月给接口网关加了 ArgusSecurityPlugin 校验，请求缺少 `x-tt-argus` 请求头就会被拦截。
+
+新版 `F2` 会自动附加 `x-tt-argus`，并从 `cookie` 中读取 `UIFID`（未登录时为 `UIFID_TEMP`）作为 `uifid` 请求头，不需要手动配置。
+
+::: details :link: 解决办法
+1. 升级到最新版本的 `F2`。
+2. 如果仍然出现 403，从浏览器重新复制完整的 `cookie`，不要只复制其中几个字段。
+3. 网关目前只校验 `x-tt-argus` 是否存在。如果将来开始校验取值，可以在 `conf.yaml` 的 `douyin.headers` 中填写浏览器请求里的值来覆盖默认值：
+
+```yaml
+f2:
+  douyin:
+    headers:
+      User-Agent: ...
+      Referer: https://www.douyin.com/
+      x-tt-argus: 从浏览器开发者工具的请求头中复制
+      uifid: 从浏览器开发者工具的请求头中复制
+```
+:::
+**参考链接：**
+- https://github.com/Johnserf-Seed/f2/issues/443
+- https://github.com/Johnserf-Seed/f2/pull/446
+
+## tiktok 403 Forbidden
+
+当下载 `tiktok` 视频时出现 `403 Forbidden` 错误时，是由于 `设备id` 被封禁导致的。
+
+`设备id` 与生成的 `cookie` 是一一对应的，如果 `设备id` 被封禁，那么生成的 `cookie` 也会被封禁。
+
+::: details :link: 解决办法
+1. 运行生成 `device_Id` 的代码片段，获取新的 `device_Id`。
+2. 将新的 `device_Id` 替换到配置文件中。
+3. 将新的 `cookie` 里的值替换到配置文件的 `cookie` 中（增量非覆盖）。
+4. 重新运行下载命令。
+:::
+
+::: tip :bulb: 视频返回 403 Access Denied
+如果报错的是视频地址（如 `v16-webapp-prime.us.tiktok.com`），响应头 `Server` 为 `AkamaiGHost`、内容是 `Access Denied`，`F2` 会提示“拒绝了当前网络出口的访问”。这是 `TikTok` 视频 CDN 按网络出口拒绝访问，与 `cookie`、设备 id 无关（2026-10 实测换用接口下发的 `cookie`、请求头或模拟浏览器都无效），请更换代理节点的地区后重试。
+:::
+**参考链接：**
+- https://f2.wiki/guide/apps/tiktok/overview#%E7%94%9F%E6%88%90deviceid-%F0%9F%9F%A2
+- https://github.com/Johnserf-Seed/f2/issues/79
+- https://github.com/Johnserf-Seed/f2/issues/154
+
+## tiktok 响应内容为空，状态码 200
+
+`TikTok` 网页接口（`www.tiktok.com/api/...` 与直播的 `webcast.tiktok.com/webcast/...`）返回 `200` 但内容为空、日志提示重试次数达到上限时，说明请求被风控拦截了，响应头中会带有 `tt_orcas_res: 1`。常见原因有两个：
+
+1. 客户端指纹：这些接口会校验 TLS 与 HTTP/2 指纹，`httpx` 发出的请求即使签名正确也会被拦截。`F2` 会通过 `curl_cffi` 自动模拟 Chrome 发送这些请求，缺少 `curl_cffi` 时日志中会有提示。
+2. 游客 cookie：用户信息等接口只接受登录后的 `cookie`；用户发布作品用游客 `cookie` 也能获取。
+
+::: details :link: 解决办法
+1. 更新到开发分支 `v0.0.1.8-pw3` 或之后发布的版本，`curl_cffi` 会作为依赖一起安装；如果日志提示未安装 `curl_cffi`（例如使用了 `--no-deps` 安装），执行 `pip install curl_cffi` 后重新运行。
+2. 在配置文件中使用登录后的 `cookie`，获取方法见本页“第 n 次请求响应内容为空”。
+3. `msToken` 会从 `cookie` 中读取，不需要单独配置，也不要手动伪造，伪造的值同样会得到空内容。
+:::
+**参考链接：**
+- https://f2.wiki/guide/apps/tiktok/overview#%E4%BD%BF%E7%94%A8%E6%8E%A5%E5%8F%A3%E6%A8%A1%E5%9E%8B%E7%94%9F%E6%88%90%E6%96%B0%E7%89%88%E7%AD%BE%E5%90%8D%E5%8F%82%E6%95%B0-%F0%9F%9F%A2
+- https://github.com/Johnserf-Seed/f2/issues/384
+
+## TypeError: object of type 'NoneType' has no len()
+
+在终端，你会看到类似以下的错误日志：
+
+```shell
+由于接口更新，部分字段处理失败:
+字段 weibo_read_count 出错: object of type 'NoneType' has no len()
+字段 weibo_topic_title 出错: object of type 'NoneType' has no len()
+```
+
+这通常是因为接口字段已更新，导致代码中的 `jsonpath` 对应的字段已经不存在或发生了更改。
+
+::: details :link: 请及时在 Issue 中反馈问题，并附上以下信息：
+1. 脱敏的 debug 日志(`f2 -d DEBUG [app_name]`)：
+    - 包含完整的错误信息及上下文。
+2. 字段描述：
+    - 明确指出哪些字段出现了问题，哪些字段可能需要更新。
+3. 接口返回数据的简化结构（可选）：
+    - 提供相关字段在接口返回数据中的大致位置，方便定位问题。
+
+收到反馈后，我会尽快排查问题，并在后续版本中更新代码适配最新接口，同时也欢迎你提交 PR。
+:::
+
+## twitter 403 forbidden
+
+当下载 `twitter` 推文时出现 `403 Forbidden` 错误时，通常是由于 `cookie` 失效，或者 `X-Csrf-Token` 与 `cookie` 不匹配导致的。
+
+::: details :link: 解决办法
+1. 登录后从浏览器重新复制完整的 `cookie`，其中应包含 `auth_token` 与 `ct0`。
+2. 将新的 `cookie` 替换到配置文件中。
+3. 重新运行下载命令。
+
+`F2` 会自动把 `cookie` 中的 `ct0` 作为 `X-Csrf-Token` 使用，所以一般不需要单独配置。只有 `cookie` 里没有 `ct0` 时，才会使用 `F2配置文件(conf.yaml)` 中的 `X-Csrf-Token`。`cookie` 配置在 `应用低频/主配置文件(app.yaml)` 或 `应用高频/自定义配置文件` 中。
+:::
+
+## twitter 404 / Query not found
+
+`X` 每次发版都可能更换 `GraphQL` 接口地址中的 `queryId`，旧的值失效后接口返回 `404`（`Query not found`）。
+
+::: details :link: 解决办法
+`F2` 遇到这种情况会自动处理：用 `cookie` 打开 `x.com`，从网页加载的脚本中读取新的 `queryId` 并重试，日志中会提示“queryId 已失效，正在从 X 网页的脚本中获取新的值”。获取到的值会缓存到 `~/.f2/cache/twitter_graphql.json`，之后的运行直接使用，直到 `X` 再次更换（届时重新获取）或 `F2` 更新了内置值（缓存的旧记录不再使用），不需要等 `F2` 发布新版。
+
+如果仍然报错：
+1. 检查 `cookie` 是否有效。`cookie` 失效时 `x.com` 返回未登录的页面，其中没有需要的脚本。
+2. 网页脚本的结构变化时可能找不到新的值，请更新 `F2` 后再试，或提交 `issue`。
+3. 怀疑缓存的值有问题时，删除 `~/.f2/cache/twitter_graphql.json` 即可恢复使用内置值。
+:::
+
+## Installing build dependencies error
+
+当安装构建依赖项时出现以下错误：
+```shell
+  × pip subprocess to install build dependencies did not run successfully.
+  │ exit code: 1
+      Looking in indexes: https://xxxx
+      ERROR: Could not find a version that satisfies the requirement hatchling (from versions: none)
+      ERROR: No matching distribution found for hatchling
+      [end of output]
+
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+```
+
+这通常是因为 `pip` 无法找到构建依赖项的版本，导致安装失败。请切换回官方源再次尝试安装。
+
+::: details :link: 解决办法
+1. 运行以下命令切换回官方源：
+
+```shell
+pip config unset global.index-url
+```
+2. 重新安装项目：
+
+```shell
+pip install f2
+```
+或
+
+```shell
+pip install -e .
+```
+:::
+
+## 代理连接失败
+
+当使用代理时出现连接失败的错误，请检查以下问题：
+
+::: details :link: 解决办法
+1. **代理类型是否正确**：确保选择了正确的代理类型（http/https/socks4/socks5）
+2. **代理地址和端口**：检查代理服务器地址和端口是否正确
+3. **认证信息**：如果代理需要认证，确保用户名和密码正确
+4. **网络连通性**：测试代理服务器是否能正常访问
+5. **防火墙设置**：检查防火墙是否阻止了代理连接
+
+**测试代理连接：**
+```bash
+# 使用curl测试SOCKS5代理
+curl --socks5 127.0.0.1:1080 https://httpbin.org/ip
+
+# 使用curl测试HTTP代理
+curl --proxy http://127.0.0.1:8080 https://httpbin.org/ip
+```
+
+**故障排除步骤：**
+1. 验证代理服务器是否正在运行且可访问
+2. 检查代理是否需要身份验证
+3. 用其他工具（curl、浏览器）测试代理
+4. 确保没有防火墙阻止连接
+5. 尝试不同的代理服务器或类型
+6. 检查代理日志中的错误消息
+:::
+
+## 自动获取 Cookie 失败：Unable to get key for cookie decryption
+
+使用 `--auto-cookie chrome` 或 `--auto-cookie edge` 时出现这个错误，多半是因为 Windows 上的新版 Chrome、Edge（2024 年 8 月以后的版本）改用了与应用绑定的加密方式（App-Bound Encryption）保存 cookie，`F2` 依赖的 `browser_cookie3`（目前为 0.20.1）还不能解密。macOS 上出现这个错误，通常是没有在钥匙串弹窗中允许访问。
+
+::: details :link: 解决办法
+1. 在 Firefox 中登录后使用 `--auto-cookie firefox`，Firefox 不受影响。
+2. 在浏览器中登录后手动复制 cookie，写入配置文件的 `cookie`，或用 `-k` 传入，获取方法见各应用的 `--cookie` 说明。
+3. macOS 上重新执行命令，并在钥匙串弹窗中选择“允许”。
+4. 提示 `Unable to read database file` 或“请结束所有浏览器相关的进程”时，是浏览器仍在运行、cookie 数据库被占用，完全关闭浏览器后重试。
+:::
+
+::: tip :bulb: 提示
+获取失败时 `F2` 不会修改配置文件，并以退出码 `1` 结束。
+:::
+
+**参考链接：**
+- https://github.com/Johnserf-Seed/f2/issues/193
+- https://github.com/borisbabic/browser_cookie3/issues/210
+
+## 抖音下载的视频不是最高清晰度
+
+`F2` 会在接口返回的所有清晰度中选择分辨率最高的一项，分辨率相同时选择码率更高的一项。有些作品在 App 中可以选择 2K、4K，但网页接口只返回到 1080p，这时只能下载到 1080p。
+
+::: tip :bulb: 提示
+最高清晰度有时只有 H.265（HEVC）编码的版本，较旧的播放器可能无法播放。可以使用 VLC、PotPlayer 等支持 H.265 的播放器，Windows 自带的播放器需要安装 HEVC 视频扩展。
+:::
+
+**参考链接：**
+- https://github.com/Johnserf-Seed/f2/issues/214

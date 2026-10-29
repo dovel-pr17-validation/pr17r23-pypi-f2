@@ -1,0 +1,81 @@
+# region mstoken-real-sinppest
+from f2.apps.douyin.utils import TokenManager
+
+if __name__ == "__main__":
+    print("douyin real msToken:", TokenManager.gen_real_msToken())
+
+# endregion mstoken-real-sinppest
+
+
+# region mstoken-cached-sinppest
+from f2.apps.douyin.utils import TokenManager
+
+if __name__ == "__main__":
+    print("douyin cached msToken:", TokenManager.cached_msToken())
+
+# endregion mstoken-cached-sinppest
+
+
+# region mstoken-false-sinppest
+from f2.apps.douyin.utils import TokenManager
+
+if __name__ == "__main__":
+    print("douyin fake msToken:", TokenManager.gen_false_msToken())
+
+# endregion mstoken-false-sinppest
+
+
+# region ttwid-sinppest
+from f2.apps.douyin.utils import TokenManager
+
+if __name__ == "__main__":
+    print("douyin ttwid:", TokenManager.gen_ttwid())
+
+# endregion ttwid-sinppest
+
+
+# region secsdk-uid-sinppest
+from f2.apps.douyin.utils import TokenManager
+
+if __name__ == "__main__":
+    print("douyin x-web-secsdk-uid:", TokenManager.gen_secsdk_uid())
+
+# endregion secsdk-uid-sinppest
+
+
+# region webid-sinppest
+from f2.apps.douyin.utils import TokenManager
+
+if __name__ == "__main__":
+    print("douyin webid:", TokenManager.gen_webid())
+
+# endregion webid-sinppest
+
+
+# region verify_fp-sinppest
+from f2.apps.douyin.utils import VerifyFpManager
+
+if __name__ == "__main__":
+    print("douyin verify_fp:", VerifyFpManager.gen_verify_fp())
+
+# endregion verify_fp-sinppest
+
+
+# region s-v-web-id-sinppest
+from f2.apps.douyin.utils import VerifyFpManager
+
+if __name__ == "__main__":
+    print("douyin s_v_web_id:", VerifyFpManager.gen_s_v_web_id())
+# endregion s-v-web-id-sinppest
+
+
+# region gateway-headers-sinppest
+from f2.apps.douyin.utils import GatewayHeaderManager
+
+if __name__ == "__main__":
+    print(
+        "douyin gateway headers:",
+        GatewayHeaderManager.gen_gateway_headers("YOUR_COOKIE_HERE"),
+    )
+
+# endregion gateway-headers-sinppest

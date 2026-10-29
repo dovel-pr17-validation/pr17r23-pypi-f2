@@ -1,0 +1,209 @@
+---
+outline: [2,3]
+---
+
+## Parameter list
+
+| Short parameter | Long parameter | Type | Description |
+| ------ | ------ | ---- | ---- |
+| `-c`   | `--config` | `FILE` | Profile path, lowest priority |
+| `-u`   | `--url` | `TEXT` | Links are provided according to the pattern |
+| `-m`   | `--music` | `BOOLEAN` | Whether to save the original audio of the video |
+| `-v`   | `--cover` | `BOOLEAN` | Whether to save video cover |
+| `-d`   | `--desc` | `BOOLEAN` | Whether to save the video desc |
+| `-p`   | `--path` | `TEXT` | The location where the video is saved |
+| `-f`   | `--folderize` | `BOOLEAN` | Whether to save the work in a separate folder |
+| `-M`   | `--mode` | `ENUM` | Download mode |
+| `-n`   | `--naming` | `TEXT` | Global video file naming method |
+| `-k`   | `--cookie` | `TEXT` | Logged in cookie |
+| `-i`   | `--interval` | `TEXT` | Download date range |
+| `-w`   | `--keyword` | `TEXT` | Search keywords for searching works |
+| `-e`   | `--timeout` | `INTEGER` | Network request timeout |
+| `-r`   | `--max_retries` | `INTEGER` | Network request timeout retry count |
+| `-x`   | `--max-connections` | `INTEGER` | Network request concurrent connection count |
+| `-t`   | `--max-tasks` | `INTEGER` | Asynchronous task count |
+| `-o`   | `--max-counts` | `INTEGER` | Maximum number of downloads |
+| `-s`   | `--page-counts` | `INTEGER` | Number of works per page |
+| `-P`   | `--proxies` | `TEXT...` | Proxy server |
+|        | `--insecure` | `FLAG` | Disable TLS certificate verification |
+|        | `--update-config` | `BOOLEAN` | Update configuration file |
+|        | `--init-config` | `TEXT` | Initialize configuration file |
+|        | `--auto-cookie` | `ENUM` | Automatically obtain cookies |
+| `-h`   |               | `FLAG` | Display rich text help |
+|        | `--help`      | `FLAG` | Display the help message and exit |
+
+
+## Detailed Description
+
+### `--config`
+
+Specify the path to the configuration file, with the lowest priority. The default path for the **main configuration file** is `f2/conf/app.yaml`, which supports **absolute paths** and **relative paths**.
+
+If the file cannot be parsed, `F2` reports the line and column of the error; it also stops with an error if the top level is not a key-value mapping or the file has no settings for this app, exiting with code `1`. When the app's settings are missing, use `--init-config` to add the default settings to the file.
+
+### `--url`
+
+Provide the link for the selected mode. For example, use the profile link for profile posts, favorites and collection, and the post link for a single post; mixes and livestreams work the same way.
+
+### `--music`
+
+Whether to save the original audio of the video. The default is `true`.
+
+### `--cover`
+
+Whether to save the video cover. The default is `true`. Only save the cover in the original size.
+
+### `--desc`
+
+Whether to save the video copy. Defaults to `true`. Keep the original desc information.
+
+### `--path`
+
+The location where the video is saved. Defaults to `Download` in the current directory. Supports **absolute paths**, **relative paths** and paths starting with `~` for the home directory (such as `~/Downloads`).
+
+::: tip :bulb: Tip
+Works are saved in `<path>/tiktok/<mode>/<username>`, where the username is the `uniqueId` (the part after `@`). When an author changes their username, the next download of that author (in any mode) renames the folders of the old username in every download mode to the new one, so the downloaded works stay with them and works whose file names have not changed are not downloaded again; later changes are followed as well. If a folder with the new username already exists in a mode, both folders of that mode are left as they are and a message is logged until you merge them and delete the old folder.
+:::
+
+### `--folderize`
+
+Whether to save the work to a separate folder. Defaults to `true`.
+
+### `--mode`
+
+Download mode:
+- `one`: single post
+- `post`: profile posts
+- `like`: favorites (videos the user liked)
+- `collect`: collection (videos the user collected)
+- `mix`: playlist (mix)
+- `search`: search posts
+- `live`：live broadcast
+
+### `--naming`
+
+Global file naming template for posts. The default is `{create}_{desc}`, supported variables include: `{nickname}`, `{uniqueId}`, `{create}`, `{aweme_id}`, `{desc}`, `{uid}`. Supported separators include: `_`, `-`.
+
+- `{nickname}`: author’s nickname
+- `{uniqueId}`: author’s username (the part after @ in the profile link)
+- `{create}`: creation time of the post
+- `{aweme_id}`: post ID
+- `{desc}`: post caption
+- `{uid}`: author ID
+
+::: tip :bulb: Tip
+In file names, captions and nicknames keep punctuation, spaces and all scripts as they are; only characters that file systems do not allow (`\ / : * ? " < > |`) are replaced with similar full-width characters (for example `?` becomes `？`), and newlines and other control characters are turned into spaces or removed. Captions longer than 200 bytes are shortened in the middle, and so is any file name that would exceed 255 bytes with its suffix, so files can also be saved to a NAS or other file systems that limit names by bytes. On Windows, paths longer than 260 characters automatically use the long path form, so no system setting needs to be changed. Use `--desc` to save the complete original caption to a `_desc.txt` file.
+:::
+
+### `--cookie`
+
+`Cookie` after login. Most interfaces require logging in to obtain data, so a `Cookie` after logging in is required.
+
+::: details :link: Please see the figure below for how to obtain `Cookie`.
+![Console Cookie](https://github.com/user-attachments/assets/4523e8c7-f74e-4d5f-9da6-6bb3658f8b24)
+:::
+
+::: tip :bulb: Tips
+- Please update `Cookie` in time when collection or risk control cannot be performed.
+- Characters other than `ascii` are not allowed. Please check carefully before updating the configuration.
+:::
+
+:::danger :bangbang: warning :bangbang:
+- Never share your `Cookie` in `Discussions`, `Issues`, `Discord` and other public places, and be careful to delete sensitive information.
+- Anyone who gets your `Cookie` can log in to your account directly.
+- When a leak occurs, please log out of your account immediately and log in again.
+:::
+
+### `--interval`
+
+Download works published within a date range, in the format: `Year-Month-Day|Year-Month-Day`. For example: `2022-01-01|2023-01-01`, set `all` to download all works. Both days are included, and dates are in Beijing time (UTC+8). An invalid format, or an end date earlier than the start date, is reported as an error before any request is made.
+
+### `--keyword`
+
+Search for keywords to search for works.
+
+### `--timeout`
+
+Network request timeout. Default is `10` seconds.
+
+### `--max_retries`
+
+Network request timeout retry count. The default is `5` times.
+
+### `--max-connections`
+
+Network request concurrent connection number. Default is `10`.
+
+### `--max-tasks`
+
+The number of asynchronous tasks. Default is `5`.
+
+### `--max-counts`
+
+The maximum number of posts to download in this run, counted across all pages; paging stops once it is reached, and when a page returns more posts than remain, the extra posts are not downloaded. `None` or `0` means no limit. Default is `0`.
+
+### `--page-counts`
+
+The number of posts requested from the API at a time. It only decides how many requests (pages) are made and does not limit how many posts are downloaded in total; some APIs ignore it and return a full page of their own size. Not recommended to exceed `20`. Default is `5`.
+
+::: tip :bulb: Tip
+`--page-counts` is how many to ask for per page and `--max-counts` is how many to download in total; one does not replace the other. For example, `-s 5 -o 2` requests 5 posts at a time and downloads at most 2. To limit the number of downloads, set `--max-counts`.
+:::
+
+### `--proxies`
+
+Configure the proxy server, supporting up to two parameters, corresponding to the `http://` and `https://` protocols.
+
+Example: `--proxies http://x.x.x.x https://x.x.x.x`。
+
+> [!IMPORTANT] IMPORTANT ❗❗❗
+> **If the proxy does not support egress HTTPS, use: `--proxies http://x.x.x.x http://x.x.x.x`.**
+
+### `--insecure`
+
+Disable `TLS` certificate verification. Use it only behind a trusted debugging proxy. The flag affects the current run only and is not written to the configuration file; set `verify: false` in `conf.yaml` to disable it permanently. See [TLS certificate verification](/en/site-config#tls-certificate-verification).
+
+```bash
+f2 tk --insecure --proxies http 127.0.0.1:8888 ...
+```
+
+### `--update-config`
+
+Update configuration files via `CLI` parameters. For details, see: [Configuring Cookies](/en/site-config#configure-cookies)。
+
+### `--init-config`
+
+Initialize the high-frequency configuration file. See: [Initialize Config File](/en/site-config#initialize-configuration-file)。
+
+### `--auto-cookie`
+
+Automatically obtain `cookie` from the browser. Please make sure to close the selected browser before using this command. Supported browsers include:
+- `chrome`
+- `firefox`
+- `edge`
+- `opera`
+- `opera_gx`
+- `safari`
+- `chromium`
+- `brave`
+- `vivaldi`
+- `librewolf`
+
+On success, the cookie is written to the configuration file (the custom file given with `-c`, if any) and `F2` exits without downloading; on failure, it prints the reason and exits with code `1`.
+
+Cookies from the latest Chrome and Edge on Windows cannot be read automatically for now; see the [FAQ](/en/faq#auto-cookie-failed-unable-to-get-key-for-cookie-decryption) for workarounds.
+
+Not supported to switch browser user settings.
+
+> [!IMPORTANT] IMPORTANT ❗❗❗
+> - Due to an update to the `Chromium` security policy, the `Cookie` encryption version has been upgraded to `V20`. Causes the `--auto-cookie` command to temporarily fail to fetch browser `cookies` issued after `August 15, 2024`.
+> - Please update `F2` to the latest version to get the latest fix.
+> - If you do not wish to upgrade, you can refer to the `PR` below to manually install the dependencies of the fixed version.
+> - [borisbabic/browser_cookie3#215](https://github.com/borisbabic/browser_cookie3/pull/215)
+> - As of `2024/dec/23`, the fix still does not support the latest `Chromium` kernel version, please use a different browser or downgrade the browser version to before `v128`.
+
+::: details :link: Example: Manually update `Cookie`.
+```shell [bash]
+f2 tk -k "your_cookie" -c your_config.yaml --update-config
+```
+:::

@@ -1,0 +1,206 @@
+# path: f2/apps/twitter/dl.py
+
+import asyncio
+from typing import Any, List, Optional, Union
+
+from rich.live import Live
+from rich.rule import Rule
+
+from f2.apps.twitter.utils import VIDEO_MEDIA_TYPES, format_file_name
+from f2.cli.cli_console import RichConsoleManager
+from f2.dl.base_downloader import BaseDownloader
+from f2.exceptions.conf_exceptions import ConfError
+from f2.i18n.translator import _
+from f2.log.logger import logger
+from f2.utils.time.timestamp import parse_interval
+
+
+class TwitterDownloader(BaseDownloader):
+    def __init__(self, kwargs: dict = {}):
+        # 只检查是否提供了 cookie：空字符串允许通过，抖音直播等请求不需要用户的 cookie
+        if kwargs.get("cookie") is None:
+            raise ConfError(
+                _(
+                    "cookie不能为空。请提供有效的 cookie 参数，或自动从浏览器获取。如 `--auto-cookie edge`"
+                ),
+                key="cookie",
+            )
+
+        # 日期区间格式错误时在请求前报错，否则各模式会翻完所有页面，却因筛选失败一个都不下载
+        parse_interval(kwargs.get("interval"))
+
+        super().__init__(kwargs)
+
+    async def create_download_tasks(
+        self,
+        kwargs: dict,
+        tweet_datas: Union[list, dict],
+        user_path: Any,
+    ) -> None:
+        """
+        创建下载任务
+
+        Args:
+            kwargs (dict): 命令行参数
+            tweet_datas (list, dict): 推文数据列表或字典
+            user_path (str): 用户目录路径
+        """
+        if (
+            not kwargs
+            or not tweet_datas
+            or not isinstance(tweet_datas, (list, dict))
+            or not user_path
+        ):
+            return
+
+        # 统一处理，将 tweet_datas 转为列表
+        tweet_datas_list = (
+            [tweet_datas] if isinstance(tweet_datas, dict) else tweet_datas
+        )
+
+        # 筛选指定日期区间内的推文。此前按推文数据中不存在的 createTime 字段筛选，
+        # 设置区间后一条推文都不下载（移植自 #461）；tweet_created_at 是按 UTC 时间
+        # 格式化的命名字段，这里改用发布时间戳，与其他平台一样按北京时间计算区间
+        if kwargs.get("interval") is None:
+            logger.warning(_("未提供日期区间参数"))
+        else:
+            interval = parse_interval(kwargs.get("interval"))
+            if interval:
+                start, end = interval
+                tweet_datas_list = [
+                    tweet
+                    for tweet in tweet_datas_list
+                    if isinstance(tweet.get("tweet_timestamp"), int)
+                    and start <= tweet["tweet_timestamp"] <= end
+                ]
+
+        # 检查是否有符合条件的推文
+        if not tweet_datas_list:
+            logger.warning(_("没有找到符合条件的推文，请检查`interval`参数是否正确"))
+            return
+
+        # 使用 Rich 的 Live 管理器
+        with Live(
+            console=RichConsoleManager().rich_console,
+            auto_refresh=False,
+            # refresh_per_second=2,
+            vertical_overflow="visible",
+        ) as live:
+            for tweet_data in tweet_datas_list:
+                await self.handler_download(kwargs, tweet_data, user_path)
+                # 手动刷新防止过快闪屏
+                live.refresh()
+
+            # 延时更新，避免过快刷新导致界面错乱
+            await asyncio.sleep(0.2)
+            # 动态更新规则输出
+            live.update(Rule(_("当前任务处理完成")))
+
+            await self.execute_tasks()
+
+    async def handler_download(
+        self, kwargs: dict, tweet_data_dict: dict, user_path: Any
+    ) -> None:
+        """
+        处理下载任务
+
+        Args:
+            kwargs (dict): 命令行参数
+            tweet_data_dict (dict): 作品数据字典
+            user_path (Any): 用户目录路径
+        """
+
+        # 构建文件夹路径
+        self.base_path = (
+            self._folder_path(
+                user_path,
+                format_file_name(
+                    kwargs.get("naming", "{create}_{desc}"), tweet_data_dict
+                ),
+            )
+            if kwargs.get("folderize")
+            else user_path
+        )
+
+        self.user_id = tweet_data_dict.get("user_id")
+        if self.user_id is None:
+            logger.debug(_("跳过下载用户推荐或广告推文"))
+            return
+
+        self.kwargs = kwargs
+        self.tweet_data_dict = tweet_data_dict
+        self.tweet_id = tweet_data_dict.get("tweet_id")
+        # 逐个下载推文中的媒体：此前只按第一个媒体的类型处理，图文混合时只下载图片
+        # （视频只得到缩略图），推文详情中有多个视频时一个都不下载
+        self.tweet_media = tweet_data_dict.get("tweet_media") or []
+
+        await self.download_images()
+        await self.download_video()
+        await self.download_desc()
+
+    def _media_urls(self, *media_types: str) -> List[Optional[str]]:
+        return [
+            media.get("url")
+            for media in self.tweet_media
+            if isinstance(media, dict) and media.get("type") in media_types
+        ]
+
+    async def download_video(self):
+        """下载推文中的视频与动图，只有一个时文件名以 _video 结尾，多个时依次编号"""
+        video_urls = self._media_urls(*VIDEO_MEDIA_TYPES)
+        if not video_urls:
+            return
+
+        name = format_file_name(
+            self.kwargs.get("naming", "{create}_{desc}"), self.tweet_data_dict
+        )
+        for i, video_url in enumerate(video_urls, start=1):
+            if not video_url:
+                logger.warning(_("{0} : 视频链接为空").format(self.tweet_id))
+                continue
+            suffix = "_video" if len(video_urls) == 1 else f"_video_{i}"
+            await self.initiate_download(
+                _("视频"), video_url, self.base_path, name + suffix, ".mp4"
+            )
+
+    async def download_images(self):
+        """下载推文中的图片，文件名以 _image_ 加序号结尾"""
+        image_urls = self._media_urls("photo")
+        if not image_urls:
+            return
+
+        name = format_file_name(
+            self.kwargs.get("naming", "{create}_{desc}"), self.tweet_data_dict
+        )
+        for i, image_url in enumerate(image_urls, start=1):
+            if not image_url:
+                logger.warning(
+                    _("{0} : {1} 该推文没有图片链接").format(
+                        self.tweet_id, self.tweet_data_dict.get("tweet_desc")
+                    )
+                )
+                continue
+            await self.initiate_download(
+                _("图片"),
+                f"{image_url}?format=jpg&name=large",
+                self.base_path,
+                f"{name}_image_{i}",
+                ".jpg",
+            )
+
+    async def download_desc(self):
+        desc_name = (
+            format_file_name(
+                self.kwargs.get("naming", "{create}_{desc}"), self.tweet_data_dict
+            )
+            + "_desc"
+        )
+        desc_content = (
+            ""
+            if self.tweet_data_dict.get("tweet_desc_raw") is None
+            else self.tweet_data_dict.get("tweet_desc_raw")
+        )
+
+        await self.initiate_static_download(
+            _("文案"), desc_content, self.base_path, desc_name, ".txt"
+        )

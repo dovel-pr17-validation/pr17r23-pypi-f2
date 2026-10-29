@@ -1,0 +1,108 @@
+# 开发者必看
+
+如果你是开发者或贡献着，开发前请阅读此文档再查看接口。
+
+## 指定配置文件
+
+开发者可以直接定义自己的配置文件，然后在测试时通过 `-c` 参数指定配置文件的路径，例如：
+
+```bash
+f2 dy -c conf/app.yaml
+```
+也可以在代码中指定配置文件的路径，例如：
+
+<<< @/snippets/set-debug.py#set-config-snippet{3}
+
+## 设置调试日志级别
+
+<<< @/snippets/set-debug.py#set-debug-snippet{6}
+
+支持代码 `接口` 模式的同时也支持在 `CLI` 模式中加上 `-d` 来指定记录日志级别。可选的参数 `DEBUG`，`INFO`，`WARNING`，`ERROR`。
+
+```bash
+$ f2 -d WARNING dy -M post
+```
+
+![set-debug](/douyin/set-debug.png)
+
+::: tip :bulb: 提示
+`F2` 的日志会自动脱敏：配置里的 `cookie`、`key`、`token`、密码，代理地址中的账号密码，文本里的整个 `cookie` 串以及各平台的登录字段（如推特的 `auth_token`、`ct0`，微博的 `SUB`，抖音与 TikTok 的 `sessionid`、`sid_tt`）在写入控制台、文件或向上传播到你自己的日志处理器之前就会被打码（只保留开头几个字符和长度）。作为库使用时，如需在自己的日志里打印配置，可以用 `from f2.log.redact import redact_config` 先脱敏。配置错误（`ConfError`）的报错文本会列出出错的配置项名称，其中敏感配置项的值同样已经打码，可以直接输出。
+:::
+
+## 日志输出到控制台
+
+作为库导入 `F2` 时，日志默认只输出到控制台，不会在当前目录创建 `logs` 目录，也不会清理旧日志。如需同时写入日志文件，调用 `log_setup` 并指定 `log_path`（默认 `./logs`，传 `None` 表示不写文件）；`CLI` 启动时会自动完成这一配置。
+
+`CLI` 默认把日志写入当前目录的 `logs` 目录。在没有写文件权限的环境里，可以在应用名之前加上 `--no-log-file`，只在控制台输出，也不会创建 `logs` 目录或清理旧日志：
+
+```bash
+f2 --no-log-file dy -M one -u <作品链接>
+```
+
+<<< @/snippets/set-debug.py#log-2-console-snippet{6}
+
+![log-2-console](/douyin/log-2-console.png)
+
+::: tip :bulb: 提示
+如果你想要输出到控制台的日志更加详细，可以使用 `DEBUG` 级别。`log_setup` 在同一进程内只会生效一次，之后再调用会直接返回已配置好的 `logger`。异常堆栈单独记录在 `f2-trace` 记录器中，作为库使用时可通过 `log_setup(log_to_console=False, log_name="f2-trace", lazy_file_creation=True)` 开启它的文件输出。
+:::
+
+## 异常与退出码
+
+`F2` 的全部自定义异常都继承自 `f2.exceptions.F2Error`，下面分为接口（`APIError`）、配置（`ConfError`）、数据库（`DatabaseError`）与文件（`FileError`）四个分支。作为库使用时只需捕获根类：
+
+```python
+from f2.exceptions import F2Error
+
+try:
+    await handler.fetch_user_post(...)
+except F2Error as e:
+    print("F2 运行失败：", e)
+```
+
+接口请求失败时，例如 HTTP 状态码错误、重试次数用完、网络错误或返回内容不是 JSON，`crawler` 与 `handler` 的方法会抛出对应的 `APIError` 子类，异常的 `status_code` 属性是真实的 HTTP 状态码，不会再返回空数据，因此可以区分"没有作品"和"请求失败"。异常在构造时不会输出日志，是否记录由调用方决定。
+
+`CLI` 的退出码：
+
+| 退出码 | 含义 |
+| :--- | :--- |
+| `0` | 全部完成 |
+| `1` | 遇到 `F2Error` 而中止，控制台只输出一行错误原因和 FAQ 链接，完整堆栈写入 `f2-trace` 日志；读取配置等准备阶段的错误也按同样方式报告；或者有文件在所有链接都尝试后仍下载失败，结束时会列出这些文件 |
+| `2` | 命令行参数错误，由 `click` 报告 |
+| `130` | 按 Ctrl+C 中断（收到 `SIGTERM` 时为 `143`） |
+
+## WSS配置 <Badge type="warning" text="实验性" />
+
+如果你想使用 `douyin` 或 `tiktok` 的直播弹幕转发功能，那么你需要配置 `WSS` 服务的地址和端口。
+
+`WSS` 配置须在 `conf.yaml` 文件中进行配置，配置如下：
+
+::: code-group
+```yaml [douyin]
+douyin:
+......
+    wss:
+      domain: localhost
+      port: 8765
+      verify: false
+......
+```
+```yaml [tiktok]
+tiktok:
+......
+    wss:
+      domain: localhost
+      port: 8766
+      verify: false
+......
+```
+:::
+
+::: details :link: 示例：启动 `WSS` 服务并连接。
+![wss](/douyin/wss-connect.png)
+:::
+
+> [!IMPORTANT] 重要 ❗❗❗
+> - `wss` 段中的 `verify` 是本地弹幕转发服务的证书设置，当前版本暂不支持开启，请保持 `false`。它与 `conf.yaml` 顶层控制 `HTTP` 请求证书校验的 `verify`（默认开启）无关。
+> - 本地连接与远程连接的默认超时时间均为 `10` 秒。
+> - 如果本地在超时时间内未连接至 `WSS`，`F2` 将自动断开连接以节省资源。此时日志会提示本地 `WebSocket` 服务器没有客户端连接、已停止接收弹幕，并不代表直播已经结束。

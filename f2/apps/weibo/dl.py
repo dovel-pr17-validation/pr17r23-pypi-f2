@@ -1,0 +1,231 @@
+# path: f2/apps/weibo/dl.py
+
+import asyncio
+from typing import Any, Dict, List, Optional, Union
+
+from rich.live import Live
+from rich.rule import Rule
+
+from f2.apps.weibo.api import WeiboAPIEndpoints
+from f2.apps.weibo.utils import format_file_name
+from f2.cli.cli_console import RichConsoleManager
+from f2.dl.base_downloader import BaseDownloader
+from f2.exceptions.conf_exceptions import ConfError
+from f2.i18n.translator import _
+from f2.log.logger import logger
+
+
+class WeiboDownloader(BaseDownloader):
+    def __init__(self, kwargs: Optional[dict] = None) -> None:
+        kwargs = kwargs or {}
+        # 只检查是否提供了 cookie：空字符串允许通过，抖音直播等请求不需要用户的 cookie
+        if kwargs.get("cookie") is None:
+            raise ConfError(
+                _(
+                    "cookie不能为空。请提供有效的 cookie 参数，或自动从浏览器获取。如 `--auto-cookie edge`"
+                ),
+                key="cookie",
+            )
+
+        super().__init__(kwargs)
+
+    async def create_download_tasks(
+        self,
+        kwargs: Dict,
+        weibo_datas: Union[List, Dict],
+        user_path: Optional[Any] = None,
+    ) -> None:
+        """
+        创建下载任务
+
+        Args:
+            kwargs (dict): 命令行参数
+            weibo_datas (list, dict): 微博数据列表或字典
+            user_path (str): 用户目录路径
+        """
+
+        if (
+            not kwargs
+            or not weibo_datas
+            or not isinstance(weibo_datas, (list, dict))
+            or not user_path
+        ):
+            return
+
+        # 统一处理，将 weibo_datas 转为列表
+        weibo_datas_list = (
+            [weibo_datas] if isinstance(weibo_datas, dict) else weibo_datas
+        )
+
+        # 使用 Rich 的 Live 管理器
+        with Live(
+            console=RichConsoleManager().rich_console,
+            auto_refresh=False,
+            # refresh_per_second=2,
+            vertical_overflow="visible",
+        ) as live:
+            for weibo_data in weibo_datas_list:
+                await self.handler_download(kwargs, weibo_data, user_path)
+                # 手动刷新防止过快闪屏
+                live.refresh()
+
+            # 延时更新，避免过快刷新导致界面错乱
+            await asyncio.sleep(0.2)
+            # 动态更新规则输出
+            live.update(Rule(_("当前任务处理完成")))
+
+            await self.execute_tasks()
+
+    async def handler_download(
+        self, kwargs: Dict, weibo_data_dict: Dict, user_path: Any
+    ) -> None:
+        """
+        处理下载任务
+
+        Args:
+            kwargs (dict): 命令行参数
+            weibo_data_dict (Dict): 作品数据字典
+            user_path (Any): 用户目录路径
+        """
+
+        # 构建文件夹路径
+        self.base_path = (
+            self._folder_path(
+                user_path,
+                format_file_name(
+                    kwargs.get("naming", "{create}_{desc}"), weibo_data_dict
+                ),
+            )
+            if kwargs.get("folderize")
+            else user_path
+        )
+        self.uid = weibo_data_dict.get("uid")
+        self.weibo_id = weibo_data_dict.get("weibo_id")
+        self.kwargs = kwargs
+        self.weibo_data_dict = weibo_data_dict
+
+        # mblogtype: 2    # 0 微博 1 热门微博 2 置顶微博
+
+        # 检查微博是否可见
+        if self.weibo_data_dict.get("weibo_is_visible"):
+            logger.error(_("微博：{0} 无查看权限").format(self.weibo_id))
+            return
+
+        else:
+            logger.debug(_("开始下载微博：{0}").format(self.weibo_id))
+            await self.download_desc()
+
+        # 检查微博是否有图片；视频的 page_info.type 既可能是整数 11，也可能是字符串 "11"（#249）。
+        # 视频微博的 pic_ids 是空列表而不是缺失，此前按 None 判断，视频从未被下载。
+        # 部分视频的 page_info.type 是 5，结构相同，有播放地址时同样按视频下载
+        if (
+            not self.weibo_data_dict.get("weibo_pic_num")
+            and not weibo_data_dict.get("weibo_pic_ids")
+            and (
+                weibo_data_dict.get("playback_list")
+                or str(weibo_data_dict.get("is_video")) == "11"
+            )
+        ):
+            await self.download_video()
+        else:
+            await self.download_images()
+            await self.download_mix_videos()
+
+        return
+
+    async def download_video(self):
+        if not self.weibo_data_dict.get("playback_list"):
+            logger.warning(_("{0} 该微博无法下载，视频走丢了").format(self.weibo_id))
+            return
+
+        logger.debug(
+            _("清晰度列表：{0}，码率列表：{1}").format(
+                self.weibo_data_dict.get("quality_list"),
+                self.weibo_data_dict.get("bitrate_list"),
+            )
+        )
+
+        video_name = (
+            format_file_name(
+                self.kwargs.get("naming", "{create}_{desc}"), self.weibo_data_dict
+            )
+            + "_video"
+        )
+        video_url = self.weibo_data_dict.get("playback_list")
+
+        if video_url:
+            await self.initiate_download(
+                _("视频"),
+                video_url,
+                self.base_path,
+                video_name,
+                ".mp4",
+            )
+
+    async def download_desc(self):
+        # 处理文案下载任务
+        desc_name = (
+            format_file_name(
+                self.kwargs.get("naming", "{create}_{desc}"), self.weibo_data_dict
+            )
+            + "_desc"
+        )
+        desc_content = self.weibo_data_dict.get("weibo_desc_raw")
+        await self.initiate_static_download(
+            _("文案"), desc_content, self.base_path, desc_name, ".txt"
+        )
+
+    async def download_mix_videos(self):
+        """
+        下载图片与视频混排的微博中的视频，只有一个时文件名以 _video 结尾，多个时依次编号
+
+        这类微博的 pic_ids 只有其中的图片，此前视频被直接丢掉
+        """
+        videos = self.weibo_data_dict.get("weibo_mix_videos") or []
+        if not videos:
+            return
+
+        name = format_file_name(
+            self.kwargs.get("naming", "{create}_{desc}"), self.weibo_data_dict
+        )
+        for i, video_urls in enumerate(videos, start=1):
+            suffix = "_video" if len(videos) == 1 else f"_video_{i}"
+            await self.initiate_download(
+                _("视频"), video_urls, self.base_path, name + suffix, ".mp4"
+            )
+
+    async def download_images(self):
+        if not self.weibo_data_dict.get("weibo_pic_ids"):
+            # 有图片却没有返回图片 ID 时才需要到客户端查看；纯文字微博此前也报这条警告
+            if self.weibo_data_dict.get("weibo_pic_num"):
+                logger.warning(
+                    _("{0} 该微博无法下载，需要在微博客户端查看").format(self.weibo_id)
+                )
+            else:
+                logger.debug(
+                    _("{0} 该微博没有图片或视频，只保存文案").format(self.weibo_id)
+                )
+            return
+
+        # 动图的原图是 GIF，此前一律存成 .jpg
+        pic_infos = self.weibo_data_dict.get("weibo_pic_infos")
+        if not isinstance(pic_infos, dict):
+            pic_infos = {}
+        for i, image_url in enumerate(self.weibo_data_dict.get("weibo_pic_ids", [])):
+            image_name = (
+                format_file_name(
+                    self.kwargs.get("naming", "{create}_{desc}"), self.weibo_data_dict
+                )
+                + f"_image_{i + 1}"
+            )
+            pic_type = (pic_infos.get(image_url) or {}).get("type")
+            image_suffix = ".gif" if pic_type == "gif" else ".jpg"
+            image_url = WeiboAPIEndpoints.LARGEST + f"/{image_url}"
+            if image_url is not None:
+                await self.initiate_download(
+                    _("图片"), image_url, self.base_path, image_name, image_suffix
+                )
+            else:
+                logger.warning(
+                    _("{0} 该微博没有图片链接，无法下载").format(self.weibo_id)
+                )

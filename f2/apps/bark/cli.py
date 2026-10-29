@@ -1,0 +1,460 @@
+# path: f2/apps/bark/cli.py
+
+import typing
+from pathlib import Path
+
+import click
+
+import f2
+from f2 import helps
+from f2.apps.bark.utils import ClientConfManager
+from f2.cli.cli_commands import set_cli_config
+from f2.i18n.translator import TranslationManager, _
+from f2.log.logger import logger
+from f2.log.redact import mask_secret, redact_config
+from f2.utils.config.conf_manager import ConfigManager, get_f2_setting
+from f2.utils.config.merge import (
+    check_number_options,
+    coerce_bool_options,
+    merge_config,
+)
+from f2.utils.core.adapters import adapt_validation_call
+from f2.utils.file.path import get_resource_path
+from f2.utils.http.proxy import check_proxy_avail, parse_proxy_address
+
+
+def handler_help(
+    ctx: click.Context,
+    param: typing.Union[click.Option, click.Parameter],
+    value: typing.Any,
+) -> None:
+    """
+    处理帮助信息 (Handle help messages)
+
+    根据提供的值显示帮助信息或退出上下文
+    (Display help messages based on the provided value or exit the context)
+
+    Args:
+        ctx: click的上下文对象 (Click's context object).
+        param: 提供的参数或选项 (The provided parameter or option).
+        value: 参数或选项的值 (The value of the parameter or option).
+    """
+
+    if not value or ctx.resilient_parsing:
+        return
+    helps.get_help("bark")
+    ctx.exit()
+
+
+def handler_language(
+    ctx: click.Context,
+    param: typing.Union[click.Option, click.Parameter],
+    value: typing.Any,
+) -> typing.Any:
+    """用于设置语言 (For setting the language)
+
+    Args:
+        ctx: click的上下文对象 (Click's context object)
+        param: 提供的参数或选项 (The provided parameter or option)
+        value: 参数或选项的值 (The value of the parameter or option)
+    """
+
+    if not value or ctx.resilient_parsing:
+        return
+    TranslationManager.get_instance().set_language(value)
+    global _
+    _ = TranslationManager.get_instance().gettext
+    return value
+
+
+def validate_key_length(
+    ctx: click.Context,
+    param: typing.Union[click.Option, click.Parameter],
+    value: typing.Any,
+) -> typing.Any:
+    """验证API 密钥长度 (Validate the length of the api key)
+
+    Args:
+        ctx: click的上下文对象 (Click's context object)
+        param: 提供的参数或选项 (The provided parameter or option)
+        value: 参数或选项的值 (The value of the parameter or option)
+    """
+
+    if value and len(value) != 22:
+        raise click.BadParameter(_("API 密钥长度应该为22位"))
+    return value
+
+
+def validate_device_token_length(
+    ctx: click.Context,
+    param: typing.Union[click.Option, click.Parameter],
+    value: typing.Any,
+) -> typing.Any:
+    """验证设备密钥长度 (Validate the length of the device key)
+
+    Args:
+        ctx: click的上下文对象 (Click's context object)
+        param: 提供的参数或选项 (The provided parameter or option)
+        value: 参数或选项的值 (The value of the parameter or option)
+    """
+
+    if value and len(value) != 64:
+        raise click.BadParameter(_("设备密钥长度应该为64位"))
+    return value
+
+
+def validate_proxies(
+    ctx: click.Context,
+    param: typing.Union[click.Option, click.Parameter],
+    value: typing.Any,
+) -> typing.Any:
+    """验证代理参数 (Validate proxy parameters)
+
+    Args:
+        ctx: click的上下文对象 (Click's context object)
+        param: 提供的参数或选项 (The provided parameter or option)
+        value: 参数或选项的值 (The value of the parameter or option)
+    """
+
+    if value:
+        # 解析代理类型和地址
+        proxy_type, proxy_address = value
+
+        # 验证代理类型是否支持
+        if proxy_type not in ("http", "https", "socks4", "socks5"):
+            raise click.BadParameter(
+                _("代理类型不支持，请使用http、https、socks4或socks5")
+            )
+
+        # 解析代理地址，支持 username:password@host:port
+        try:
+            proxy_config = parse_proxy_address(proxy_type, proxy_address)
+        except ValueError:
+            raise click.BadParameter(_("代理地址格式错误，正确格式为: host:port"))
+
+        # 校验代理服务器是否可用
+        if not check_proxy_avail(
+            proxy_config,
+            verify=(
+                False if ctx.params.get("insecure") else get_f2_setting("verify", True)
+            ),
+            test_url="https://api.day.app/",
+            expected_content="code",
+        ):
+            raise click.BadParameter(_("代理服务器不可用"))
+
+        return proxy_config
+
+    return value
+
+
+@click.command(name="bark", help=_("Bark 是一个iOS端的通知推送工具"))
+@click.option(
+    "--config",
+    "-c",
+    type=click.Path(file_okay=True, dir_okay=False, readable=True),  # exists=True
+    help=_("配置文件路径，最低优先"),
+)
+@click.option(
+    "--key",
+    "-k",
+    type=str,
+    help=_("Bark 的 API Key"),
+    callback=validate_key_length,
+)
+@click.option(
+    "--token",
+    "-d",
+    type=str,
+    help=_("Bark 的 Device Token"),
+    callback=validate_device_token_length,
+)
+@click.option(
+    "--mode",
+    "-M",
+    type=click.Choice(f2.BARK_LIST),
+    # default="get",
+    # required=True,
+    help=_(
+        "选择发送模式，get：使用 GET 请求发送通知，post：使用 POST 请求发送通知，cipher：加密发送通知，默认为 get"
+    ),
+)
+@click.option(
+    "--title",
+    "-t",
+    type=str,
+    help=_("推送的标题"),
+)
+@click.option(
+    "--body",
+    "-b",
+    type=str,
+    help=_("推送的内容"),
+)
+@click.option(
+    "--call",
+    "-cl",
+    type=bool,
+    # default=False,
+    help=_("是否持续响铃，默认关闭"),
+)
+@click.option(
+    "--level",
+    "-l",
+    type=click.Choice(["active", "timeSensitive", "passive", "critical"]),
+    # default="active",
+    help=_(
+        "推送级别。active：默认，timeSensitive：时效性通知，passive：被动通知，critical：紧急通知"
+    ),
+)
+@click.option(
+    "--volume",
+    "-v",
+    type=int,
+    # default=5,
+    help=_("推送音量，范围 0-10"),
+)
+@click.option(
+    "--badge",
+    "-bd",
+    type=int,
+    # default=1,
+    help=_("推送的角标数量"),
+)
+@click.option(
+    "--autoCopy",
+    "-ac",
+    type=bool,
+    # default=True,
+    help=_("是否自动复制推送内容（iOS 14.5 及以上需手动长按复制）"),
+)
+@click.option(
+    "--copy",
+    "-cp",
+    type=str,
+    help=_("指定要复制的内容，若未指定则复制整个推送内容"),
+)
+@click.option(
+    "--sound",
+    "-s",
+    type=str,
+    # default="birdsong",
+    help=_("推送铃声，可选项请查看 APP 设置"),
+)
+@click.option(
+    "--icon",
+    "-i",
+    type=str,
+    help=_("推送图标 URL，相同的图标 URL 仅下载一次"),
+)
+@click.option(
+    "--group",
+    "-g",
+    type=str,
+    # default="默认",
+    help=_("推送分组，通知中心将按分组显示推送"),
+)
+@click.option(
+    "--isArchive",
+    "-a",
+    type=bool,
+    # default=True,
+    help=_("是否保存推送，默认保存"),
+)
+@click.option(
+    "--url",
+    "-u",
+    type=str,
+    help=_("点击推送时跳转的 URL，支持 URL Scheme 和 Universal Link"),
+)
+@click.option(
+    "--proxies",
+    "-P",
+    type=str,
+    nargs=2,
+    help=_(
+        "配置代理服务器，支持最多两个参数。格式：类型 地址，例如：socks5 127.0.0.1:1080"
+    ),
+    callback=validate_proxies,
+)
+@click.option(
+    "--update-config",
+    type=bool,
+    is_flag=True,
+    help=_("使用命令行选项更新配置文件。需要先使用'-c'选项提供一个配置文件路径"),
+)
+@click.option(
+    "--init-config", type=str, help=_("初始化配置文件。不能同时初始化和更新配置文件")
+)
+@click.option(
+    "--insecure",
+    is_flag=True,
+    is_eager=True,
+    help=_("关闭 TLS 证书校验，仅建议在受信任的调试代理环境中使用"),
+)
+@click.option(
+    "-h",
+    is_flag=True,
+    is_eager=True,
+    expose_value=False,
+    help=_("显示富文本帮助"),
+    callback=handler_help,
+)
+@click.pass_context
+def bark(
+    ctx: click.Context,
+    config: str,
+    init_config: str,
+    update_config: bool,
+    **kwargs,
+):
+    ##################
+    # f2 存在2个主配置文件，分别是app低频配置(app.yaml)和f2低频配置(conf.yaml)
+    # app低频配置存放app相关的参数
+    # f2低频配置存放计算值所需的参数
+
+    # 其中cli参数具有最高优先，cli >= 自定义 >= 低频
+    # 在f2低频配置中设置代理参数
+    # 在app低频配置中设置好后端接口的url，加密参数等
+    # 在自定义配置中可以设置不同用户的高频参数，如用户主页，原声下载，封面下载，文案下载，下载模式等
+    # cli参数为配置文件的热修改，可以随时修改每一个参数。
+    ##################
+
+    # 读取低频主配置文件
+    main_manager = ConfigManager(f2.APP_CONFIG_FILE_PATH)
+    main_conf_path = get_resource_path(f2.APP_CONFIG_FILE_PATH)
+    main_conf = main_manager.get_app_config("bark")
+
+    # 更新主配置文件中的代理参数
+    main_conf["proxies"] = ClientConfManager.proxies()
+
+    # 更新主配置文件中的 TLS 证书校验参数
+    main_conf["verify"] = get_f2_setting("verify", True)
+
+    # --insecure 等价于 verify: false，不以 insecure 键写入配置文件
+    if kwargs.pop("insecure", False):
+        kwargs["verify"] = False
+    main_conf["encryption"] = ClientConfManager.encryption()
+
+    # 更新主配置文件中的headers参数
+    kwargs.setdefault("headers", {})
+    kwargs["headers"]["User-Agent"] = ClientConfManager.user_agent()
+    kwargs["headers"]["Referer"] = ClientConfManager.referer()
+
+    # 如果初始化配置文件，则与更新配置文件互斥
+    if init_config and not update_config:
+        main_manager.generate_config("bark", init_config)
+        return
+    elif init_config:
+        raise click.UsageError(_("不能同时初始化和更新配置文件"))
+    # 如果没有初始化配置文件，但是更新配置文件，则需要提供配置文件路径
+    elif update_config and not config:
+        raise click.UsageError(
+            _("要更新配置，首先需要使用'-c'选项提供一个自定义配置文件路径")
+        )
+
+    # 读取自定义配置文件
+    if config:
+        custom_manager = ConfigManager(config)
+    else:
+        custom_manager = main_manager
+        config = str(main_conf_path)
+
+    if update_config:  # 如果指定了 update_config，更新配置文件
+        update_manger = ConfigManager(config)
+        # 先检查数字配置项，避免把 0 或负数写进配置文件
+        check_number_options(kwargs)
+        update_manger.update_config_with_args("bark", **kwargs)
+        return
+
+    # 缺少该应用的配置或格式不对时报错；更新配置时允许文件里还没有这一段
+    custom_conf = custom_manager.get_app_config("bark")
+
+    # 检查 kwargs["proxies"] 的类型
+    if kwargs.get("proxies"):
+        # 如果 proxies 是字典（来自 validate_proxies 回调），直接使用
+        if isinstance(kwargs["proxies"], dict):
+            pass
+        # 如果 proxies 是元组（理论上不应该发生，但作为后备处理兼容旧版）
+        elif (
+            isinstance(kwargs["proxies"], (tuple, list)) and len(kwargs["proxies"]) >= 2
+        ):
+            try:
+                kwargs["proxies"] = parse_proxy_address(*kwargs["proxies"][:2])
+            except ValueError:
+                logger.error(_("代理地址格式错误"))
+                ctx.abort()
+
+    # 从低频配置开始到高频配置再到cli参数，逐级覆盖，如果键值不存在使用父级的键值
+    kwargs = merge_config(main_conf, custom_conf, **kwargs)
+    # 配置文件中的 yes/no 会被读成字符串，按命令行布尔选项转换
+    kwargs = coerce_bool_options(ctx.command.params, kwargs)
+    kwargs = check_number_options(kwargs)
+
+    # 添加代理验证逻辑（使用新格式）
+    proxy_config = kwargs.get("proxies", {})
+    # 命令行 --proxies 指定的代理已在 validate_proxies 中检查过
+    if (
+        proxy_config
+        and isinstance(proxy_config, dict)
+        and proxy_config is not ctx.params.get("proxies")
+    ):
+        # 检查是否有有效的代理配置
+        proxy_type = proxy_config.get("type")
+        proxy_host = proxy_config.get("host")
+        proxy_port = proxy_config.get("port")
+
+        # 如果有完整的代理配置，则进行验证
+        if proxy_type and proxy_host and proxy_port:
+            logger.debug(_("检测到代理配置，正在验证代理可用性..."))
+
+            # 构建代理配置进行测试
+            if not check_proxy_avail(
+                proxy_config,
+                verify=kwargs.get("verify", True),
+                test_url="https://api.day.app/",
+                expected_content="code",
+            ):
+                logger.error(_("代理服务器不可用，请检查代理配置"))
+                # 可以选择是否继续执行或退出
+                # ctx.abort()  # 如果要在代理失败时退出
+            else:
+                logger.info(_("代理服务器验证成功"))
+
+    # 从配置文件中获取 key、token，如果命令行没有传入 key、token
+    key = kwargs.get("key") or main_conf.get("key")
+    token = kwargs.get("token") or main_conf.get("token")
+
+    # 验证 key 和 token 的长度（无论从命令行还是配置文件获取）
+    try:
+        adapt_validation_call(validate_key_length, ctx, key)
+        adapt_validation_call(validate_device_token_length, ctx, token)
+    except click.BadParameter as e:
+        logger.error(str(e))
+        ctx.exit(1)
+
+    kwargs["key"] = key
+    kwargs["token"] = token
+
+    logger.debug(_("API密钥：{0}").format(mask_secret(kwargs.get("key", ""))))
+    logger.debug(_("设备密钥：{0}").format(mask_secret(kwargs.get("token", ""))))
+    logger.info(_("主配置路径：{0}").format(main_conf_path))
+    logger.info(_("自定义配置路径：{0}").format(Path.cwd() / config))
+    logger.debug(_("主配置参数：{0}").format(redact_config(main_conf)))
+    logger.debug(_("自定义配置参数：{0}").format(redact_config(custom_conf)))
+    logger.debug(_("CLI参数：{0}").format(redact_config(kwargs)))
+
+    # 尝试从命令行参数或kwargs中获取body，mode
+    missing_params = [param for param in ["body", "mode"] if not kwargs.get(param)]
+
+    if missing_params:
+        logger.error(
+            _(
+                "Bark CLI 缺乏必要参数：[cyan]{0}[/cyan]。详情请查看帮助，[yellow]f2 bark -h/--help[/yellow]"
+            ).format("，".join(missing_params))
+        )
+        adapt_validation_call(handler_help, ctx, True)
+
+    # 添加app_name到kwargs
+    kwargs["app_name"] = "bark"
+    ctx.invoke(set_cli_config, **kwargs)

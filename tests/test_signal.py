@@ -1,0 +1,130 @@
+# path: tests/test_signal.py
+
+import asyncio
+import signal
+import subprocess
+import sys
+
+import pytest
+
+from f2.utils.core.signal import SignalManager
+
+
+@pytest.fixture(autouse=True)
+def restore_signal_state():
+    """用例注册的信号处理函数与设置的关闭标记不影响之后的用例"""
+    handlers = {
+        signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)
+    }
+    yield
+    for signum, handler in handlers.items():
+        signal.signal(signum, handler)
+    SignalManager().shutdown_event.clear()
+
+
+# 模拟长时间运行的任务
+@pytest.mark.asyncio
+async def test_long_running_task_without_shutdown():
+    """
+    测试长时间运行的任务，未触发 shutdown 信号
+    """
+    task = asyncio.create_task(long_running_task())
+
+    # 等待任务完成
+    await task
+    # 确保任务完成
+    assert task.done()
+
+
+# 模拟长时间运行的任务，触发 shutdown
+@pytest.mark.asyncio
+async def test_long_running_task_with_shutdown():
+    """
+    测试长时间运行的任务，触发 shutdown 信号
+    """
+    # 创建 SignalManager 实例并注册信号
+    signal_manager = SignalManager()
+    signal_manager.register_shutdown_signal()
+
+    # 创建并启动任务
+    task = asyncio.create_task(long_running_task())
+
+    # 等待任务开始运行
+    await asyncio.sleep(0.1)
+
+    # 模拟接收到 SIGINT 信号，触发 shutdown 逻辑
+    signal_manager._shutdown_event.set()
+
+    # 明确调用取消任务
+    task.cancel()
+
+    # 等待任务结束
+    await asyncio.sleep(0.2)
+    # 确保任务完成
+    assert task.done()
+    # 确保任务被取消
+    assert task.cancelled()
+
+
+# 模拟的长时间运行任务
+@pytest.mark.asyncio
+async def long_running_task():
+    print("Start long running task...")
+    for i in range(10):
+        if SignalManager.is_shutdown_signaled():
+            print("Stopping task early due to shutdown signal.")
+            break
+        print(f"Task is running... ({i+1}/10)")
+        await asyncio.sleep(0.1)
+    print("End of long running task.")
+
+
+@pytest.mark.asyncio
+async def test_signal_manager_shutdown_event():
+    """
+    测试 SignalManager 的 shutdown_event 是否在接收到信号后被设置
+    """
+    signal_manager = SignalManager()
+
+    # 确保 shutdown_event 是清除状态
+    signal_manager.shutdown_event.clear()
+
+    # 确认事件开始时未被设置
+    assert not signal_manager.shutdown_event.is_set()
+
+
+# 事件循环运行中收到信号，与事件循环启动前（如读取配置时）收到信号
+RUNNING = (
+    "async def main():\n"
+    "    print('ready', flush=True)\n"
+    "    await asyncio.sleep(30)\n"
+    "asyncio.run(main())\n"
+)
+NO_LOOP = "print('ready', flush=True)\ntime.sleep(30)\n"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows 不能向子进程发送 SIGINT")
+@pytest.mark.parametrize("body", [RUNNING, NO_LOOP], ids=["loop", "no-loop"])
+@pytest.mark.parametrize(
+    "signum", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"]
+)
+def test_interrupted_run_exits_with_128_plus_signal(signum, body):
+    # 此前判断是否在测试环境的条件写反了，正常运行时被中断也以 0 退出；
+    # 没有正在运行的事件循环时则抛出 RuntimeError、以 1 退出
+    code = (
+        "import asyncio, time\n"
+        "from f2.utils.core.signal import SignalManager\n"
+        "SignalManager().register_shutdown_signal()\n" + body
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", code],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert process.stdout.readline().strip() == "ready"
+
+    process.send_signal(signum)
+
+    assert process.wait(timeout=10) == 128 + signum
+    assert "Traceback" not in process.stderr.read()

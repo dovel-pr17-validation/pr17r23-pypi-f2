@@ -1,0 +1,380 @@
+# Configuration file
+
+::: warning important
+Read this chapter carefully to understand how `F2` configuration files work and how to operate them efficiently.
+:::
+
+## Main configuration file
+
+`F2` uses several types of configuration files:
+
+- **App low-frequency/main configuration file** (`app.yaml`): stores settings that rarely change, such as `cookie`, filename templates, download paths, and network timeouts.
+- **F2 configuration file** (`conf.yaml`): global settings such as computation parameters, proxies, certificate verification and update checks.
+- **User configuration files** (`conf.yaml`): placed in your user directory, your project directory or the path set by `F2_CONFIG`; they contain only the settings you want to change and override the defaults of the `F2` configuration file. See [User configuration files](#user-configuration-files).
+- **App default configuration file** (`defaults.yaml`): initialization templates for each app. <font color=red><u>**Do not modify this file**</u></font>.
+- **Test configuration file** (`test.yaml`): configuration for the project's tests; it only holds guest data and is not shipped in the `wheel`.
+- **Custom configuration files**: high-frequency settings tailored for personal use that override defaults.
+
+::: info :bulb: What is yaml?
+Presents the data serialization format file in an outline-like indentation manner, [what is yaml?](https://zh.wikipedia.org/wiki/YAML).
+:::
+
+::: tip :bulb: Writing switches
+Switches such as `folderize`, `cover`, `desc`, `music`, `lyric`, `check_update` and `enable_bark` accept `true`/`false` or `yes`/`no` (also `on`/`off` and `1`/`0`). Any other value makes an app switch report an error and exit, while `check_update` and `enable_bark` are treated as off; `verify` can also be the path of a CA certificate file.
+:::
+
+**App low-frequency/main configuration file (app.yaml)**: used to save all app configurations that do not change frequently, such as `cookie`, `file name template`, `download path`, `connection timeout`, `Number of timeout retries`, etc.
+
+**F2 configuration file (conf.yaml)**: used to save the configuration of `F2`, such as `computation parameters` and `agent` of different apps.
+
+**App default configuration file (defaults.yaml)**: used to save the initialization default configuration template of each app, <font color=red><u>**_Please do not modify and use it_**</u> </font>.
+
+**Test Configuration File (test.yaml)**: Holds the configuration used by the `F2` test cases. It only contains guest data and is not shipped in the `wheel`. To run tests with personal cookies, do not write them into this file; supply them in this order of precedence (higher overrides lower):
+
+1. Environment variables `F2_TEST_<APP>_<KEY>`, e.g. `F2_TEST_DOUYIN_COOKIE`, `F2_TEST_BARK_KEY`, `F2_TEST_TIKTOK_DEVICE_ID`;
+2. A `test.local.yaml` next to `test.yaml` (git-ignored, same structure);
+3. The defaults in `test.yaml`.
+
+::: code-group
+<<< @../../f2/conf/app.yaml
+<<< @../../f2/conf/conf.yaml
+<<< @../../f2/conf/defaults.yaml
+<<< @../../f2/conf/test.yaml
+:::
+
+With high- and low-frequency parameters separated, you only maintain long-lived settings like `cookie` in `app.yaml`. Frequently changed options—such as home page links or download modes—are placed in custom configuration files. This approach simplifies maintenance when managing multiple profiles.
+
+Useful links:
+
+- [Initialize configuration file](#initialize-configuration-file)
+- [Custom configuration file](#custom-configuration-file)
+- [Configure cookies](#configure-cookies)
+- [Advanced usage](./advance-guide)
+
+- If you already know how to use configuration files, you can skip this chapter and view [Advanced Usage](./advance-guide).
+
+## Initialize configuration file
+
+Check out the list of currently supported apps
+
+```bash
+$ f2 -h
+```
+
+After `F2` is installed, first generate the initial configuration for the app you want to use, for example Douyin:
+
+::: code-group
+
+```sh [Windows]
+$ f2 dy --init-config my_dy.yaml
+```
+
+```sh [Linux]
+$ f2 dy --init-config my_dy.yaml
+```
+
+```sh [MacOS]
+$ f2 dy --init-config my_dy.yaml
+```
+:::
+
+`my_dy.yaml` is the generated custom configuration file; adjust it as needed. For other apps, replace `dy` with their short name, e.g. `f2 wb --init-config my_wb.yaml`.
+
+::: tip Tip
+When the target file already exists, `--init-config` does not overwrite it: if the file has no configuration for the app yet, the default configuration is appended; otherwise only the missing settings are added. Existing values, other apps' settings and comments are kept, and the original file is backed up to a `.bak` file with the same name before any change. The same file can therefore be initialized for several apps in turn, e.g. `f2 dy --init-config my.yaml` followed by `f2 tk --init-config my.yaml`.
+:::
+
+Then check the [Command Line Guide](guide/what-is-f2) of the **app** and configure your custom configuration file according to the documentation, otherwise it will not work properly.
+
+::: tip :bulb: You will be greeted with a few simple questions
+
+1. **Are both complete app names and abbreviated names supported?**
+
+Yes, both full app name and short name are supported. For example: `douyin` and `dy`, `tiktok` and `tk`.
+
+::: code-group
+
+  ```sh [dy]
+  $ f2 dy/douyin --init-config dy.yaml
+  ```
+  ```sh [tk]
+  $ f2 tk/tiktok --init-config tk.yaml
+  ```
+
+2. **Does the configuration file support relative paths?**
+
+Configuration file paths support `absolute` and `relative` paths. The initialization configuration file is forced to be overwritten and will not be automatically backed up.
+
+3. **Can't find the main configuration file?**
+
+Please refer to: [location of configuration file](#location of configuration file).
+:::
+
+## Custom configuration file
+
+Since the configuration file of `F2` adopts separate design for high and low frequency parameters, this means that you can set `different configuration files` for the `same app`.
+
+You can set only one parameter in a custom configuration file, or you can set parameters that you need to modify frequently.
+
+### Flexible configuration for multiple users
+
+For example, I follow 3 users. Among them are A's `Home Page Works', B's `Like Page Works', and C's `Live Broadcast'. Then I can configure a dedicated profile for each user.
+
+In `F2`, first configure `cookie` and other parameters you need to set in the **app low-frequency configuration file (app.yaml)**. Then create exclusive configuration files for users A, B, and C in other directories, and only need to configure the parameters that are not set in the low frequency.
+
+As shown in the two `high frequency parameters` below, they are the download modes required by different users.
+
+::: code-group
+
+```yaml [User A’s homepage post]
+douyin:
+  # 浩子
+  url: https://www.douyin.com/user/MS4wLjABAAAAu8qwDm1-muGuMhZZ-tVzyPVWlUxIbQRNJN_9k83OhWU?vid=7263127189829307659
+  # Homepage post
+  mode: post
+```
+
+```yaml [User B’s favorite page post]
+douyin:
+  #小布丁
+  url: https://www.douyin.com/user/MS4wLjABAAAA35iXl5qqCbLKY99pUvxkXzvpSXi8jgUbJ0zR4EuTpcHcS8PHaEb6G9yB6iKR0dNl?vid=7240082457372937511
+  # Like the post
+  mode: like
+```
+
+```yaml [User C live broadcast]
+  douyin:
+  # 醒子8ke
+  url: https://live.douyin.com/775841227732
+  # Live mode
+  mode: live
+```
+:::
+
+::: tip :bulb: Description
+This is just an example. In fact, user B's like page is not open, and user C may not live broadcast. Everything is set according to the actual situation.
+:::
+
+Then you can open the terminal and directly enter the path to the custom configuration file to download it with one click. The remaining low-frequency parameters will be automatically merged, so there is no need to worry.
+
+::: code-group
+
+```bash [User A]
+$ f2 dy -c X:\A.yaml
+```
+
+```bash [user B]
+$ f2 dy -c X:\B.yaml
+```
+
+```bash [user C]
+$ f2 dy -c X:\C.yaml
+```
+:::
+
+Isn't it very convenient and easy to manage🤭, you can add your favorite user profiles and set your desired download mode at any time.
+
+::: warning configuration priority
+- The `CLI` parameter has the highest priority, the `custom configuration file` has the second priority, and the `app low-frequency configuration file (app.yaml)` has the lowest priority.
+- `CLI` > `Custom configuration file` > `Apply low-frequency configuration file (app.yaml)`.
+- High-frequency parameters will overwrite low-frequency parameters, and unset parameters will not be overwritten.
+- To learn more about `CLI` parameters, see [CLI Reference](/cli).
+:::
+
+## Configure Cookies
+
+Through simple configuration, users and developers can get started with `F2` immediately. Just pass the `--update-config` command to save `cookie` to the main configuration file.
+
+Or use the `--auto-cookie` command to automatically obtain it from the browser. :warning: **See red warning below** :warning:.
+
+::: code-group
+
+```sh [--update-config]
+$ f2 dy -k "cookie copied from browser" -c app.yaml --update-config
+```
+
+```sh [--auto-cookie]
+$ f2 dy -c app.yaml --auto-cookie edge
+```
+:::
+
+Of course, if you don’t want to make mistakes, manually copy the `cookie` in the browser, and then use the `--update-config` command to save it to the main configuration file. The manual copying operation can be done in Google.
+
+::: warning :warning: Important reminder
+- When updating the configuration file, the original configuration file will be backed up in the same directory. The backup file name is `*.yaml.bak` to facilitate rollback.
+- If `--auto-cookie` does not specify the `-c` parameter, it will be saved directly to the **low-frequency configuration file (app.yaml)**.
+- `cookies` can also be saved to custom configuration files. It depends on your usage habits. For beginners, please strictly follow the instructions in the document.
+- The `--update-config` command and the `--auto-cookie` command will overwrite the `cookie` in the main configuration file, please use it with caution.
+- The `--update-config` command needs to specify the `-c` parameter, otherwise an error will be reported.
+:::
+
+:::danger :fire: Unable to use `--auto-cookie` command? :fire:
+Due to the update of `Chromium` security policy, the `Cookie` encryption version has been upgraded to `V20`. As a result, the `--auto-cookie` command is temporarily unable to obtain browser `cookies` released after `August 15, 2024`.
+
+- Please update `F2` to the latest version to get the latest fixes.
+- If you do not want to upgrade, you can refer to the following `PR` to manually install the repaired version of dependencies.
+- [borisbabic/browser_cookie3#215](https://github.com/borisbabic/browser_cookie3/pull/215)
+- As of `2024/dec/23` the fixed version still cannot support browsers with the latest `Chromium` kernel version, please use other browsers or downgrade the browser version to `v128`.
+:::
+
+## Location of configuration file
+
+You can find them in the `x:\xxxxxxx\Python\Lib\site-packages\f2\conf\` folder.
+
+::: tip :bulb: Tips
+If you cannot find the configuration folder path, you can enter it in the terminal
+
+::: code-group
+```sh [Windows]
+$ pip show f2
+```
+
+```sh [Linux]
+$ pip3 show f2
+```
+
+```sh [MacOS]
+$ pip3 show f2
+```
+Then check `Location` and find the configuration file in that directory.
+:::
+
+## User configuration files
+
+The `F2` configuration file (`conf.yaml`) lives in `site-packages`, is replaced on upgrade, and may not be writable in some environments. To change only some of its settings, put them in a user configuration file instead of editing `site-packages`.
+
+`F2` reads the following files from lowest to highest priority. Later files override earlier ones, and all of them are layered on top of the default `conf.yaml`:
+
+1. User directory: `~/.f2/conf.yaml` (`C:\Users\<username>\.f2\conf.yaml` on Windows)
+2. Project directory: `conf.yaml` in the directory where you run `F2`
+3. The file set by the `F2_CONFIG` environment variable
+
+The file uses the same structure as the default `conf.yaml`; write only the parts you want to change. Mappings are merged key by key, and other values (including lists) are replaced as a whole. For example, to disable certificate verification and change the Douyin `User-Agent`:
+
+```yaml
+f2:
+  verify: false
+  douyin:
+    headers:
+      User-Agent: "Mozilla/5.0 ..."
+```
+
+::: tip :bulb: Tip
+- When a user configuration file is read, `F2` logs `Loaded user config: <path>` so you can confirm it took effect.
+- User configuration only affects what `F2` reads; it is never written back to the `conf.yaml` in `site-packages`.
+- The interface language is still set with `-l`, which applies to the current run only; `i18n` in user configuration files is ignored.
+- If a file cannot be parsed, its top level is not a mapping, or the file set by `F2_CONFIG` does not exist, `F2` reports an error and exits with code `1`.
+- For app configuration (`app.yaml`), use `-c` to pass a custom configuration file.
+:::
+
+## Proxy configuration
+
+F2 supports multiple types of proxy servers, including HTTP, HTTPS, SOCKS4, and SOCKS5.
+
+### Configuration format
+
+```yaml
+app_name:
+  proxies:
+    type: socks5           # Proxy type: http, https, socks4, socks5
+    host: 127.0.0.1        # Proxy server address
+    port: 1080             # Proxy server port
+    username: user         # Username (optional)
+    password: pass         # Password (optional)
+    rdns: true             # Remote DNS resolution (SOCKS proxies only)
+```
+
+::: tip :bulb: Tip
+- Write the username and password as they are; characters such as `@`, `:` and `/` do not need to be URL-encoded. On the command line, use `--proxies socks5 username:password@127.0.0.1:1080`.
+- Values that were already URL-encoded still work, so when a `%` in the original value is followed by two hexadecimal characters (such as `%41`), write that `%` as `%25`.
+- Live comment (danmaku) connections are opened by websockets, whose versions before 17.2 cannot parse a password containing `/`, `?` or `#`; upgrade websockets if you run into this.
+:::
+
+### Proxy types
+
+| Type | Description | Use case |
+|------|-------------|----------|
+| `http` | HTTP proxy | Suitable for most HTTP requests |
+| `https` | HTTPS proxy | Suitable for encrypted connections |
+| `socks4` | SOCKS4 proxy | Basic SOCKS proxy |
+| `socks5` | SOCKS5 proxy | **Recommended**, supports authentication and UDP |
+
+### Configuration examples
+
+::: code-group
+
+```yaml [SOCKS5 proxy]
+douyin:
+  proxies:
+    type: socks5
+    host: 127.0.0.1
+    port: 1080
+```
+
+```yaml [HTTP proxy]
+douyin:
+  proxies:
+    type: http
+    host: proxy.example.com
+    port: 8080
+```
+
+```yaml [Authenticated proxy]
+douyin:
+  proxies:
+    type: socks5
+    host: proxy.example.com
+    port: 1080
+    username: myuser
+    password: mypass
+```
+:::
+
+### Command line configuration
+
+You can also temporarily set proxy through command line parameters:
+
+```bash
+# SOCKS5 proxy
+f2 dy --proxies socks5 127.0.0.1:1080
+
+# HTTP proxy
+f2 dy --proxies http proxy.example.com:8080
+```
+
+### Proxy testing
+
+F2 will automatically test proxy availability before use. If the proxy cannot connect, an error message will be displayed.
+
+## TLS certificate verification
+
+`F2` verifies `TLS` certificates for every `HTTPS` request by default. Disable it only behind a trusted debugging proxy (for example a capture tool with a self-signed certificate). Any of the following works:
+
+::: code-group
+```yaml [conf.yaml]
+f2:
+  # true (default) / false / path to a CA bundle
+  verify: true
+```
+
+```bash [Command line]
+# Disable verification for this run only; nothing is written to the config file
+f2 dy --insecure -u "https://www.douyin.com/user/xxx" -M post
+```
+
+```python [As a library]
+kwargs = {
+    "headers": {...},
+    "cookie": "...",
+    "verify": False,  # or the path to a CA bundle
+}
+```
+:::
+
+> [!WARNING] Note
+> - With verification disabled, credentials such as `cookie` can be intercepted; `F2` logs one warning when it is off.
+> - This switch only affects `HTTP` requests. The `verify` under the `wss` section configures the local danmaku forwarding service and is unrelated.
+
+## What's next?
+
+- For more details on CLI commands, see [CLI Reference](/cli).

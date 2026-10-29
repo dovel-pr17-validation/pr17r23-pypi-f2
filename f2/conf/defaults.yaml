@@ -1,0 +1,87 @@
+douyin:
+  url:
+  music:
+  lyric:
+  cover:
+  desc:
+  path: Download
+  folderize:
+  mode:
+  naming:
+  cookie:
+  interval: all
+  timeout:
+  max_retries:
+  max_connections:
+  max_counts:
+  max_tasks:
+  page_counts:
+
+tiktok:
+  url:
+  music:
+  cover:
+  desc:
+  path: Download
+  folderize:
+  mode:
+  naming:
+  cookie:
+  keyword:
+  interval: all
+  timeout:
+  max_connections:
+  max_counts:
+  max_retries:
+  max_tasks:
+  page_counts:
+
+weibo:
+  url:
+  path: Download
+  folderize:
+  mode:
+  naming:
+  cookie:
+  keyword:
+  interval: all
+  timeout:
+  max_retries:
+  max_connections:
+  max_counts:
+  max_tasks:
+  page_counts:
+
+twitter:
+  url:
+  path: Download
+  folderize:
+  mode:
+  naming:
+  cookie:
+  interval: all
+  timeout:
+  max_retries:
+  max_connections:
+  max_counts:
+  max_tasks:
+  page_counts:
+
+bark:
+  key:
+  token:
+  title:
+  body:
+  mode:
+  retry:
+  ringtones:
+  icon:
+  level:
+  volume:
+  call:
+  isArchive:
+  sound:
+  autoCopy:
+  copy:
+  group:
+  badge:
