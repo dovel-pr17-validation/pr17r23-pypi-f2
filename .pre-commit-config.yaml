@@ -25,7 +25,7 @@ repos:
 
 # Python type checker
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.1
+    rev: v2.4.0
     hooks:
     -   id: mypy
         additional_dependencies: [types-protobuf, types-aiofiles, types-requests]
